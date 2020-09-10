@@ -1,0 +1,230 @@
+---
+title: "PPAS Challenge Answers"
+output:
+  pdf_document:
+    highlight: default
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: 2
+  html_document:
+    toc: yes
+sansfont: Calibri
+html_document:
+  highlight: haddock
+  theme: spacelab
+---
+
+```{r 00InitPackages, message = FALSE, echo = FALSE, warning = FALSE}
+#install.packages("pander")
+library(pander)
+# Set table properties for html document
+panderOptions('table.style', 'rmarkdown')
+# Cuts off decimal after 4 digits
+panderOptions("round", 4)
+knitr::opts_chunk$set(tidy = F,
+                      comment = '   ')
+options(tinytex.verbose = T)
+```
+
+# Intro
+Here we present potential answers to the challenge questions provided. There is almost always more than one way to perform even simple tasks in R, so consider these merely suggested answers. Recall that we used the USArrests and state.x77 datasets from R's "datasets" package. This package should already be loaded into your console when you open R Studio. The questions can be found in the accompanying Word document.
+
+Notes:
+
++ _Not all output is shown because some of it is big and cumbersome. We encourage you to run these lines of code on your own machine._
++ _We use the function kable() from the "knitr" package to clean up the output of tables, but this is more important for displaying output in a document like this. The kable() function is hardly necessary for displaying tables in your own console._
+
+## Load packages
+Load necessary packages.
+```{r 00packages, message = FALSE, warning = FALSE}
+# install.packages("datasets"); library(datasets) just in case you don't have it!
+library(dplyr)
+library(car)
+library(knitr)
+```
+
+
+
+# Questions
+## Data summary (Question 1)
+__Q1:__ Take a look at R’s documentation of these datasets to familiarize yourself with them. Look at data summaries and histograms to get a sense for the distribution of values. Are both datasets of the class “data.frame”? You’ll probably want to make sure they both are.
+
+__A1:__ Often when working with large datasets, this step can catch obvious outliers and data errors. Additionally, you will surely find it useful to know more about the distributions of your relevant variables.
+```{r 01summary, eval = FALSE}
+?USArrests
+?state.x77
+```
+
+```{r 01bsummary}
+summary(USArrests)
+summary(state.x77)
+statedata <- as.data.frame(state.x77)
+hist(statedata$Murder,
+     breaks = 10)
+```
+
+And a ggplot solution:
+```{r, warning = F, message = F, eval = F}
+library(ggplot2)
+ggplot(statedata,
+       mapping = aes(x = Murder)) +
+  geom_histogram(binwidth = 1)
+```
+
+## Data prep (Questions 2 - 3)
+__Q2:__ Join the information from the two data frames together into a single data frame, matching by state.
+
+__A2:__ Here we use more than one method to join data, left_join and cbind.
+```{r 01join}
+arrestdata <- USArrests %>% 
+  mutate(State = rownames(USArrests))
+statedata <- statedata %>%
+  mutate(State = rownames(statedata))
+joindata.1 <- statedata %>%
+  left_join(arrestdata, by = c("State" = "State"))
+joindata.2 <- cbind(state.x77, USArrests) 
+```
+
+__Q3:__ You’ll want to make sure that the names of your columns make sense, and that no two columns have the same name.
+
+__A3:__ In joindata.2, note that there are two "Murder" columns with the same name. This could be a problem if we were to use that version of the joined data from the cbind function, so we'll proceed with the first dataset, joindata.1. We clarify below which murder rates are which by manipulating the data frame's names. We also show a new input to the left_join function that adds suffixes to column names in the intersection of both data frames.
+```{r 01rename}
+names(joindata.1)[names(joindata.1) %in% c("Murder.x", "Murder.y")] <- c("Murder1976", "Murder1973")
+joindata.1 <- statedata %>%
+  left_join(arrestdata, by = c("State" = "State"),
+            suffix = c("1976", "1973"))
+```
+
+Clean up the workspace, one file at a time.
+```{r 01cleanup, eval = FALSE}
+rm(arrestdata, joindata.2, statedata)
+gc()
+```
+
+This is a quick way to remove all but a few objects. The gc() function helps to actually clear out the objects and the RAM they are using.
+```{r 01cleanup2, eval = FALSE}
+rm(list = ls()[!(ls() %in% c("joindata.1"))])
+gc()
+```
+
+## Analysis (Questions 4 - 7)
+__Q4:__ Create a correlation matrix of all the numeric columns. Later in modeling, it will be important to know which variables are correlated to each other.
+
+__A4:__ You might be tempted to make a correlation matrix using a double loop. Please resist. Note that you must remove any categorical variables from the data frame before using the cor() function.
+```{r 02cormat, results = "hide"}
+cor(joindata.1 %>% 
+      select(-State))
+```
+
+__Q5:__ Create a pivot table that splits observations into five groups of ten, ordered by 1973 murder rates, and then calculates average 1976 murder rates within each group. 
+
+
+__A5:__ This just one instance where dplyr comes in very handy. Pivot tables are easy! Note that you could have created a group column for 1973 murder rates in a separate mutate step beforehand, but here I did it all in one step using ntile. ntile() allows you to bucket continuous variables into equally sized groups, sorted in numerical order. 
+```{r 02pivot1}
+kable(joindata.1 %>% 
+  group_by(MRate1973.ntile = ntile(Murder1973, 5)) %>% 
+  summarize(MRate1973 = mean(Murder1973),
+            MRate1976 = mean(Murder1976)), digits = 2)
+```
+
+__Q5 (bonus):__ If you’re feeling especially bold, pick three new variables from the dataset, split each one into two groups by ordered values (ntile), and then calculate average 1976 murders rates in each of the eight group combinations.
+
+__A5 (bonus):__ To pivot over more variables, it's as simple as inputting more into the group_by() function. Note that it is also possble, and probably more common even, to group by existing categorical variables without needing to bucket them.
+```{r 02pivot2}
+kable(joindata.1 %>%
+  group_by(Illiteracy.ntile = ntile(Illiteracy, 2), 
+           UrbanPop.ntile = ntile(UrbanPop, 2), 
+           Mrate1973.ntile = ntile(Murder1973, 2)) %>%
+  summarize(MRate1976 = mean(Murder1976), 
+            Obs = n()), 
+  digits = 2)
+```
+
+Not all groupings are guaranteed to have the same sample size, and in fact, one potential grouping had no observations. Nowhere was there an above average murder rate with below average illiteracy and below average urban population (the 1,1,2 combo). Note that we used the n() function to count observations in each grouping.
+
+__Q6:__	Create a linear regression model to predict murder rates in 1976 using information from previous years. Feel free to use any predictor variables that make sense, but be sure to include murder and assault rates in 1973 in order to answer later parts of this question.
+
+__Q6a:__ Notice that two of the column names from the original state.x77 dataset have spaces. This creates problems in fitting a linear model if you want to use those variables. Change those variable names so that they don’t have spaces.
+
+
+__A6a:__ "Life Exp" and "HS Grad" were column names that came from a matrix where that type of chicanery is allowed. We'll rename those now, and note that you can always index things numerically if it's easier, as we've done below.
+```{r 01rename2}
+names(joindata.1)[c(4, 6)] <- c("LifeExp", "HSGrad")
+```
+
+__Q6b:__	Check the normality of the response variable using a quantile-quantile plot, and/or find a statistical hypothesis test for normality.
+
+
+__A6b:__ Below we check the normality of the 1976 murder rates by state, showing both a q-q plot and the results of the Shipiro-Wilk test for normality.
+```{r 02normplot}
+qqnorm(joindata.1$Murder1976)
+qqline(joindata.1$Murder1976)
+shapiro.test(joindata.1$Murder1976)
+```
+
+The response data appear to have light tails based on the quantile-quantile plot, and the Shapiro-Wilk test rejects the normality assumption. So we will proceed with caution as we model. Our p-values have the potential to be misleading.
+
+__Q6c:__	Fit a model to predict murder rates by state in 1976, using at least 1973’s assault and murder rates, and then anything else you think might be predictive. Look at the model summary.
+
+__A6c:__ We fit a linear model to predict 1976 murder rates. Note that the I() function allows you to mutate new variables within the modeling step. Here I have derived each state's population density from the Population and Area variables and included it as a predictor in the model.
+```{r 02modelfit1}
+model.1 <- lm(Murder1976 ~ Murder1973 + Assault + 
+                UrbanPop + I(Population/Area) + 
+                Illiteracy + Income + HSGrad, 
+              data = joindata.1)
+summary(model.1)
+```
+
+Past murder rates seem to predict future murder rates well. But it seems weird at first that, despite a 0.74 correlation coefficient between Assault and Murder1976, past assault rates are not a statistically signficant predictor of future murder rates in this model. What we haven't taken into account is the high linear correlation coefficient between the 1973 assault and murder rates predictor variables. The coefficients in linear models are more interpretable when the variables have low correlations. In this case, the 1973 murder rates variable is the stronger predictor, and it has stolen any thunder that past assault rates may have had.
+
+__Q7:__	Note the high correlation between assault rates in 1973 and murder rates in 1973 in your correlation matrix from earlier. One of those variables is likely to be statistically insignificant in your linear model. 
+
+__Q7a:__ Think about what is happening here, and what we can do to clarify effects in a linear model. Implement your idea as part of your best model.
+
+__A7a:__ We know that when predictor variables are highly correlated, interpretation of the coefficients and their significance can become difficult. Let's try a little trick, and then we'll also remove some of the least significant variables in the model (based solely on p-values, for now).
+```{r 02modelfit2}
+cor(joindata.1$Murder1973, joindata.1$Assault)
+cor(joindata.1$Murder1973, joindata.1$Assault/joindata.1$Murder1973)
+model.2 <- lm(Murder1976 ~ Murder1973 + I(Assault/Murder1973) + 
+                I(Population/Area) + Illiteracy, 
+              data = joindata.1)
+kable(summary(model.2)$coef, digits = 4)
+```
+
+By using the ratio of assault rates to murder rates, we are able to reduce the absolute correlation between the two model variables from 0.80 to 0.53, while retaining some unique, potentially predictive information in the assault rates. As it turns out, the assault rate variable is still statistically insignificant as you can see above. But in general, using ratios and differences between variables can help to extract information from more predictors without clogging the model with variables that are too linearly correlated. A more relevant example might be predicting variable annuity lapse rates from knowledge of account value (AV) and benefit base (BB). These are typically very correlated; however, we can use AV to represent policy size and BB/AV to represent in-the-moneyness in a linear model and avoid multicollinearity. 
+
+__Q7b:__ Arrive at a best model, and check the residual plots for any funny business.
+
+__A7b:__ Here's my final model, after removing variables/coefficients with high p-values.
+```{r 02modelfit3}
+model.3 <- lm(Murder1976 ~ Murder1973 + I(Population/Area), data = joindata.1)
+kable(summary(model.3)$coef, digits = 4)
+```
+
+Some common residual plots pop out when you simply plot the model object.
+```{r 02modeladequacy, fig.keep = "first"}
+plot(model.3)
+```
+
+If you're more into algorithmic variable selection, here's a stepwise method using AIC as the evaluation metric. I have used the "trace = 0" input to silence the step-by-step output, which details at which step variables were included and excluded during the process. I also told the function to step backward so that it removes unhelpful variables but never tries to add back variables. 
+```{r 02stepwise}
+model.4 <- step(lm(Murder1976 ~ Population + Income + Illiteracy + 
+                     LifeExp + HSGrad + Frost + Area + Murder1973 + 
+                     Assault + UrbanPop + Rape, data = joindata.1), 
+                direction = "backward", trace = 0) 
+kable(summary(model.4)$coef, digits = 4)
+```
+
+Now that you have carpal tunnel from typing out all of those variable names, let's make that easier. Using "." in the model formula simply tells it to include all variables in the data frame that haven't yet been called. A "-" sign can then leave out variables you don't want. 
+```{r 02stepwise2}
+model.4 <- step(lm(Murder1976 ~ . - State, 
+                   data = joindata.1), trace = 0) 
+kable(summary(model.4)$coef, digits = 4)
+```
+
+This model seems to better than my first, having a higher adjusted R-squared. However, with so many variables on such a small dataset, we have run the risk of overfitting.
+
+One last function we want to share shows us the Variance Inflation Factors for each predictor variable. Greater values indicate increased linear correlation between the predictor variables, and values too far above about 3.0 or 4.0 can lead to fitted coefficients with confusing values and high standard errors. With a thorough understanding of your data, you can work around or through such correlation issues, which are often referred to as "multicollinearity." 
+```{r 02vif}
+vif(model.4)
+```
