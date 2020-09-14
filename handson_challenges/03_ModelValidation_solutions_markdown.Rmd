@@ -1,0 +1,167 @@
+---
+title: 'PPAS Challenge: Practical data concerns'
+output: 
+  html_document:
+    toc: True
+  pdf_document:
+    toc: True
+---
+
+## Background
+In this challenge we use a [Kaggle dataset](https://www.kaggle.com/mazharkarimi/heart-disease-and-stroke-prevention/metadata) with data on the prevalence of cardiovascular disease and risk factors. We have created a synthetic, derivative dataset for the purposes of this challenge. The synthetic dataset contains 5 years of seriatim data on heart attack rates by state, year, sex, age, and race.
+
+## Data license
+The database license and content license that govern the original dataset can be found in a document in the PPAS GitHub repository. 
+
+## Goals
+Prepare data for modeling and validation.
+
+## Load data and packages
+```{r Load, warning = F, message = F}
+library(dplyr)
+library(ggplot2)
+library(ROCR)
+
+# Import data and model (from challenge 2) ####
+# Only if needed! Feel free to use your own objects from challenge #2.
+
+heartattack <- readRDS("02_heartdiseasedataset.RDS")
+logistic.model <- readRDS("02_SampleLogisticModel.RDS")
+```
+
+## Challenges
+### 1) Use the predict() function to create a column of probability predictions in the dataset.
+
+```{r 1_AppendPredictions}
+# Method 1
+heartattack <- heartattack %>%
+  mutate(Preds = predict(logistic.model, newdata = ., type = "response"))
+
+# Method 2
+heartattack$Preds <- predict(logistic.model, newdata = heartattack, type = "response")
+```
+
+### 2) Create A/E plots using the holdout subset.
+
+#### a) Across a numeric variable like "Year" (i.e. Year on the x-axis)
+
+**We first create a summarized data frame for the plot, and then we create the A/E plots using both base-R techniques and ggplot.** 
+
+```{r 2a_AoverEByYear}
+year.plot.data <- heartattack %>%
+  filter(Sample == "holdout") %>%
+  group_by(Year) %>%
+  summarize(AE.year = mean(outcome)/mean(Preds))
+
+# Base R
+plot(x = year.plot.data$Year,
+     y = year.plot.data$AE.year,
+     type = "l",
+     lwd = 2,
+     col = "blue",
+     ylim = c(0.95, 1.05),
+     xlab = "Year",
+     ylab = "A/E")
+abline(h = 1,
+       lty = 2)
+
+# ggplot
+year.plot.data %>%
+  ggplot(aes(x = Year, y = AE.year)) +
+  geom_line(color = "blue", size = 1) +
+  geom_line(aes(y = 1), linetype = 2) +
+  ylim(c(0.95, 1.05)) + ylab("A/E")
+```
+
+
+##### b) Across a categorical variable like "Race" (i.e. Race on the x-axis)
+
+**The x-axis is discrete in this case, and we have to add a little extra code to each of the base-R and ggplot solutions.**
+
+```{r 2b_AoverEByRace}
+race.plot.data <- heartattack %>%
+  filter(Sample == "holdout") %>%
+  group_by(Race) %>%
+  summarize(AE.race = mean(outcome)/mean(Preds))
+
+# Base-R
+plot(x = factor(race.plot.data$Race),
+     y = race.plot.data$AE.race,
+     type = "l",
+     lwd = 2,
+     col = "blue",
+     ylim = c(0.9, 1.1),
+     xlab = "Year",
+     ylab = "A/E")
+abline(h = 1,
+       lty = 2)
+
+# ggplot
+race.plot.data %>%
+  ggplot(aes(x = factor(Race), y = AE.race, group = 1)) +
+  geom_line(color = "blue", size = 1) +
+  geom_line(aes(y = 1), linetype = 2) +
+  ylim(c(0.9, 1.1)) + ylab("A/E") +
+  xlab("Race")
+```
+
+### 3) Calculate the AUC on the holdout data.
+
+**We use the ROCR package to calculate the AUC. 58% is not particularly good, though beter than randomly guessing, which would lead to a 50% AUC.**
+
+```{r 3_AUC}
+auc.object <- prediction(heartattack$Preds[heartattack$Sample == "holdout"],
+                         heartattack$outcome[heartattack$Sample == "holdout"])
+
+performance(auc.object, "auc")@y.values[[1]]
+```
+
+
+### 4) Extra: Create a second model and construct a two-way lift chart.
+
+**Whether you look at the two-way lift chart or the AUC on the new model, there is not noticeable improvement. It seems we have added a lot of complexity to our model for no gain.**
+
+```{r TwoWayLift}
+# Fit new model with Region:Race interaction
+logistic.model2 <- glm(outcome ~ Region*Race + Year + Age + Sex, 
+                       family = binomial(link = logit), 
+                       data = heartattack %>% filter(Sample == "training"), model = F, 
+                       x = F, y = F)
+
+# Append new predictions
+heartattack <- heartattack %>%
+  mutate(Preds2 = predict(logistic.model2, 
+                          newdata = ., 
+                          type = "response"))
+
+# Create two-way lift chart
+two.way.plot.data <- heartattack %>%
+  filter(Sample == "holdout") %>%
+  group_by(Agreement = ntile(Preds2/Preds, 20)) %>%
+  summarize(AE1 = mean(outcome)/mean(Preds),
+            AE2 = mean(outcome)/mean(Preds2))
+
+plot(two.way.plot.data$Agreement,
+     two.way.plot.data$AE1,
+     ylim = c(0,2),
+     xlab = "Agreement",
+     ylab = "A/E ratio",
+     main = "Two-way Lift Plot",
+     type = "l",
+     lwd = 2,
+     col = "blue")
+lines(two.way.plot.data$Agreement,
+      two.way.plot.data$AE2,
+      lwd = 2,
+      col = "red")
+abline(h = 1, lwd = 2)
+
+# Test AUC
+auc.object <- prediction(heartattack$Preds2[heartattack$Sample == "holdout"],
+                         heartattack$outcome[heartattack$Sample == "holdout"])
+
+performance(auc.object, "auc")@y.values[[1]]
+```
+
+
+

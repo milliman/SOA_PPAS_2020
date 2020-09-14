@@ -1,0 +1,95 @@
+---
+title: 'PPAS Challenge: Fit a GLM'
+output: 
+  html_document:
+    toc: True
+---
+
+## Background
+In this challenge, we use data from the Titanic wreck in an attempt to "predict" the probability of surviving based on key traits. Logistic generalized linear models (GLMs) are used to predict or estimate log-odds of outcomes, which can be converted into probabilities.
+
+## Goals
+To practice using R's code to fit and review logistic GLMs, and to get a feel for what the coefficients mean.
+
+## Load data and packages
+```{r Load, warning = F, message = F}
+library(car)
+library(knitr)
+
+# from the "car" package datasets
+titanic <- TitanicSurvival 
+
+# or from the repository
+titanic <- read.csv("TitanicSurvival.csv",
+                    row.names = 1)
+```
+
+## Review data
+```{r DataReview}
+head(titanic)
+summary(titanic)
+```
+
+## Challenges
+### 1) Fit GLM
+Using the glm() function, build a logistic GLM to predict/estimate passenger survival ("survived") with the predictor variables "sex", "age", and "passengerClass".
+
+```{r 1_FitGLM}
+mymodel <- glm(survived ~ sex + age + passengerClass,
+               data = titanic,
+               family = "binomial")
+```
+
+### 2) Model summary 
+Output a summary of the model, including coefficients and their significance.
+
+```{r ReviewModel}
+coef(mymodel) # just the coefficients
+summary(mymodel) # more details about the model
+```
+
+
+### Follow-up questions:
+a) Which predictor variables are statistically significant at the 5% level of significance?
+
+**All variables are statistically significantly non-zero, as the p-values "Pr(>|Z|)" are much less than 0.05.**
+
+b) How can you interpret the coefficient values?
+
+**The coefficients of logisitic regression models are in units of log-odds, the natural logarithm of the odds of the outcome. _Odds are not the same as probability!_ Odds = probability / (1 - probability).**
+  
+**sex:** The odds of a male surviving were exp(-2.50) = 0.082, or about 1/12, those of a female,
+when holding other model variables constant.
+
+**age:** For every 10 years older a person was, their odds of surviving were exp(10**-0.034) = 0.71, or about 70% those of the younger individual, when holding other model variables constant.
+
+**passengerClass:** As compared to 1st class passengers, 2nd class passengers' odds of surviving
+were exp(-1.28) = 0.28, or about 30% relatively, and 3rd class passengers' odds of surviving were exp(-2.29) = 0.10, or about 10% relatively. 
+
+**For interpretation, it can be helpful to start with a baseline odds. About 40% of all passengers survived, so a baseline of 40%, or 40/60 = 0.67 odds, is reasonable. About 70% of all females survived, or 70/30 = 2.33 odds, and that would also be a reasonable baseline for interpreting the effects of sex on survival.** 
+
+**For example, suppose a particular female had a 70% likelihood of surival. The model estimates an otherwise identical male (same class, same age) would have an odds of survival of 2.33 x 0.082 = 0.19. To convert that to a probability, we calculate 0.19/(1 + 0.19) = 16%. Now we can see that being male reduced a typical passenger's probability of survival from about 70% to about 16%, or more than 4 times!** 
+
+**As you can see, probability ratios are not the same as odds ratios, and understanding their relationship helps to interpret logistic regression models.**
+
+c) Which predictor variables are the most materially significant?
+
+**The coefficients associated with categorical variables (like sex and class), are more directly comparable, and suggest that sex has the largest impact on likelihood of survival, though passenger class is also quite important. To compare the effects of continuous variables, like age, you can use a meaningful range of the variable.** 
+
+**For example, the data show a wide range of ages, from 0 to 80. We could interpret a difference of 80 years as comparable to, say, the difference between male and female or the difference between first class and third class. 0 and 80 are similarly at the extremes of that variable's distribution. The log-odds difference between a newborn and an 80-year-old is 80 x -0.034 = -2.72, which would be the largest log-odds effect (i.e. coefficient) of any predictor variable. Using continuous variable ranges in this way can help to evaluate the magnitude, or material significance, of a particular predictor variable relative to the others.** 
+
+# 3) Extra: Interactions
+Test some reasonable variable interactions in the model.
+
+**A reasonable interaction might be between class and sex, where the large effects of sex we saw before have distinct magnitudes for passengers in different classes.**
+
+```{r Interactions, comment = ""}
+intmodel <- glm(survived ~  age + passengerClass*sex,
+               data = titanic,
+               family = "binomial")
+kable(summary(intmodel)$coef, digits = 4)
+```
+
+**It takes some practice reading model outputs with interacted variables. In this case, two terms were added to the model, 2nd class with male and 3rd class with male. We see from the p-values that sex matters differently across the three classes, specifically in 3rd class. Generally, males have a low chance of survival relative to females, but it's not as low in 3rd class.**
+
+

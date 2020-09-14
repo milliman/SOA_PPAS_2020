@@ -1,0 +1,78 @@
+---
+title: 'PPAS Challenge: Practical data concerns'
+output: 
+  html_document:
+    toc: True
+  pdf_document:
+    toc: True
+---
+
+## Background
+In this challenge we use a [Kaggle dataset](https://www.kaggle.com/mazharkarimi/heart-disease-and-stroke-prevention/metadata) with data on the prevalence of cardiovascular disease and risk factors. We have created a synthetic, derivative dataset for the purposes of this challenge. The synthetic dataset contains 5 years of seriatim data on heart attack rates by state, year, sex, age, and race.
+
+## Data license
+The database license and content license that govern the original dataset can be found in a document in the PPAS GitHub repository. 
+
+## Goals
+Prepare data for modeling and validation.
+
+## Load data and packages
+```{r Load, warning = F, message = F}
+library(dplyr)
+library(ggplot2)
+library(ROCR)
+
+# Import data and model (from challenge 2) ####
+# Only if needed! Feel free to use your own objects from challenge #2.
+
+heartattack <- readRDS("02_heartdiseasedataset.RDS")
+logistic.model <- readRDS("02_SampleLogisticModel.RDS")
+```
+
+## Challenges
+### 1) Use the predict() function to create a column of probability predictions in the dataset.
+
+```{r 1_AppendPredictions}
+
+# YOUR CODE HERE ####
+
+```
+
+### 2) Create A/E plots using the holdout subset.
+
+#### a) Across a numeric variable like "Year" (i.e. Year on the x-axis)
+
+```{r 2a_AoverEByYear}
+
+# YOUR CODE HERE ####
+
+```
+
+
+##### b) Across a categorical variable like "Race" (i.e. Race on the x-axis)
+
+```{r 2b_AoverEByRace}
+
+# YOUR CODE HERE ####
+
+```
+
+### 3) Calculate the AUC on the holdout data.
+
+```{r 3_AUC}
+
+# YOUR CODE HERE ####
+
+```
+
+
+### 4) Extra: Create a second model and construct a two-way lift chart.
+
+```{r TwoWayLift}
+
+# YOUR CODE HERE ####
+
+```
+
+
+

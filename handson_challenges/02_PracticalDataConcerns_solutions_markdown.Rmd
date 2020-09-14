@@ -1,0 +1,172 @@
+---
+title: 'PPAS Challenge: Practical data concerns'
+output: 
+  html_document:
+    toc: True
+  pdf_document:
+    toc: True
+---
+
+## Background
+In this challenge we use a [Kaggle dataset](https://www.kaggle.com/mazharkarimi/heart-disease-and-stroke-prevention/metadata) with data on the prevalence of cardiovascular disease and risk factors. We have created a synthetic, derivative dataset for the purposes of this challenge. The synthetic dataset contains 5 years of seriatim data on heart attack rates by state, year, sex, age, and race.
+
+## Data license
+The database license and content license that govern the original dataset can be found in a document in the PPAS GitHub repository. 
+
+## Goals
+Prepare data for modeling and validation.
+
+## Load data and packages
+```{r Load, warning = F, message = F}
+library(dplyr)
+library(car)
+library(stringr)
+
+heartattack <- readRDS("heartdiseasedataset_modified.RDS")
+```
+
+## Review data
+```{r DataReview}
+head(heartattack)
+str(heartattack)
+```
+
+## Challenges
+### 1) Deal with outlier and missing values
+
+a) Find the number of missing values in each field.
+
+**Only "Sex" shows any missing values.**
+
+```{r 1c_NumNA}
+sapply(heartattack, function(x) sum(is.na(x)))
+```
+
+b) Does the missingness in any field correlate to the response variable or to other fields' values? Consider using the table() function for cross-tabulating two categorical variables. 
+
+**This may help determine how to deal with the missing values. By looking at bivariate, or "two-way" tables, we can assess the relationship between whether a "Sex" observation is missing and each of the categorical fields in the dataset. Comparing mean values in a continuous field, split over whether the "Sex" value is missing, shows us whether there is some correlation there. **
+
+**It looks like missingness in the "Sex" field is uncorrelated to other key fields in the dataset, which suggests that a simple imputation is probably adequate.**
+
+```{r 1b_NACorrelation}
+heartattack %>% 
+  group_by(NAsex = is.na(Sex)) %>%
+  summarize(prevalence = mean(outcome))
+
+heartattack %>% 
+  mutate(NAsex = ifelse(is.na(Sex), NA, "Not NA")) %>%
+  select(NAsex, Race) %>%
+  table(., useNA = "ifany") %>%
+  chisq.test()
+
+heartattack %>% 
+  mutate(NAsex = ifelse(is.na(Sex), NA, "Not NA")) %>%
+  select(NAsex, Age) %>%
+  table(., useNA = "ifany") %>%
+  chisq.test()
+
+heartattack %>% 
+  mutate(NAsex = ifelse(is.na(Sex), NA, "Not NA")) %>%
+  select(NAsex, LocationAbbr) %>%
+  table(., useNA = "ifany") %>%
+  chisq.test()
+
+heartattack %>% 
+  mutate(NAsex = ifelse(is.na(Sex), NA, "Not NA")) %>%
+  select(NAsex, Year) %>%
+  table(., useNA = "ifany") %>%
+  chisq.test()
+```
+
+c) Impute the missing values.
+
+**We noted in part b) that a simple imputation would be appropriate. Here we create an indicator of missingness and then change all missing "Sex" values to "Female".**
+
+```{r 1c_Imputation}
+heartattack <- heartattack %>%
+  mutate(Sex_NAInd = ifelse(is.na(Sex), 1, 0),
+         Sex = ifelse(is.na(Sex), "Female", Sex))
+```
+
+### 2) Derive a new variable for "geographic region" of USA to reduce dimensionality of that field.
+
+```{r 2_DeriveRegion}
+# # Tedious method
+# heartattack <- heartattack %>%
+#   mutate(Region = ifelse(LocationAbbr %in% c("OR", "WA", "CA", "AK", "HI"),
+#                          "West",
+#                          ifelse(CarpalTunnelMuch?,
+#                                 TRUE,
+#                                 TRUE)))
+
+# # Alternative method
+# With help from https://stackoverflow.com/questions/27714135/r-regex-for-coordinates
+library(stringr)
+heartattack <- heartattack %>%
+  mutate(latitude = as.numeric(sapply(str_extract_all(GeoLocation, "-?\\d+\\.?\\d*"), function(x) x[1])),
+         longitude = as.numeric(sapply(str_extract_all(GeoLocation, "-?\\d+\\.?\\d*"), function(x) x[2])),
+         Region = ifelse(longitude < -110,
+                         "West",
+                         ifelse(longitude < -85 & latitude > 38,
+                                "Midwest",
+                                ifelse(longitude < -85 & latitude <= 38,
+                                       "South",
+                                       "East"))))
+
+```
+
+### 3) Partition off a 30% holdout subset
+
+**Using runif() function, which generates uniform random variables between 0 and 1 as a default, we can randomly select approximately 30% of all records as a holdout subset.**
+
+```{r 3_PartitionHoldout}
+set.seed(1) # Use seeds to create same random sample every time for replicability
+heartattack <- heartattack %>%
+  mutate(Sample = ifelse(runif(n()) < 0.3,
+                         "holdout",
+                         "training"))
+
+saveRDS(heartattack,
+        file = "02_heartdiseasedataset.RDS")
+```
+
+### 4) Fit logistic regression to estimate heart attack odds given region, year, age, sex, and race.
+
+**Using the glm() function with the binomial logit link, we fit a model to predict the odds of having a heart attack in the given year.**
+
+```{r 4_FitLogisticModel}
+logistic.model <- glm(outcome ~ Region + Year + Age + Sex + Race,
+                      family = binomial(link = logit),
+                      data = heartattack %>%
+                        filter(Sample == "training"),
+                      model = F,
+                      y = F,
+                      x = F)
+
+# Reduce object size
+logistic.model$data <- NULL
+logistic.model$effects <- NULL
+
+# View model coefficients and save object
+summary(logistic.model)
+saveRDS(logistic.model, 
+        file = "02_SampleLogisticModel.RDS",
+        compress = T)
+```
+
+
+
+
+### 5) Test for multicollinearity between the predictor variables.
+
+**Using the vif() function on the model object, we can generate generalized variance inflation factors. Values around 1 indicate no collinearity between that variable and the others. Values greater than 1 should be noted. There is no firm threshold, but even values above 2 may change the way we parameterize our model.**
+
+**In this case, there is no cause for concern.**
+
+```{r 5_TestMulticollinearity}
+vif(logistic.model)
+```
+
+
+
+

@@ -1,0 +1,96 @@
+---
+title: 'PPAS Challenge: Practical data concerns'
+output: 
+  html_document:
+    toc: True
+  pdf_document:
+    toc: True
+---
+
+## Background
+In this challenge we use a [Kaggle dataset](https://www.kaggle.com/mazharkarimi/heart-disease-and-stroke-prevention/metadata) with data on the prevalence of cardiovascular disease and risk factors. We have created a synthetic, derivative dataset for the purposes of this challenge. The synthetic dataset contains 5 years of seriatim data on heart attack rates by state, year, sex, age, and race.
+
+## Data license
+The database license and content license that govern the original dataset can be found in a document in the PPAS GitHub repository. 
+
+## Goals
+Prepare data for modeling and validation.
+
+## Load data and packages
+```{r Load, warning = F, message = F}
+library(dplyr)
+library(car)
+library(stringr)
+
+heartattack <- readRDS("heartdiseasedataset_modified.RDS")
+```
+
+## Review data
+```{r DataReview}
+head(heartattack)
+str(heartattack)
+```
+
+## Challenges
+### 1) Deal with outlier and missing values
+
+a) Find the number of missing values in each field.
+
+```{r 1a_NumNA}
+
+# YOUR CODE HERE ####
+
+```
+
+b) Does the missingness in any field correlate to the response variable or to other fields' values? Consider using the table() function for cross-tabulating two categorical variables.
+
+```{r 1b_NACorrelation}
+
+# YOUR CODE HERE ####
+
+```
+
+c) Impute the missing values.
+
+```{r 1c_Imputation}
+
+# YOUR CODE HERE ####
+
+```
+
+### 2) Derive a new variable for "geographic region" of USA to reduce dimensionality of that field.
+
+```{r 2_DeriveRegion}
+
+# YOUR CODE HERE ####
+
+```
+
+### 3) Partition off a 30% holdout subset
+
+```{r 3_PartitionHoldout}
+
+# YOUR CODE HERE ####
+
+```
+
+### 4) Fit logistic regression to estimate heart attack odds given region, year, age, sex, and race.
+
+```{r 4_FitLogisticModel}
+
+# YOUR CODE HERE ####
+
+```
+
+
+### 5) Test for multicollinearity between the predictor variables.
+
+```{r 5_TestMulticollinearity}
+
+# YOUR CODE HERE ####
+
+```
+
+
+
+
