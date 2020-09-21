@@ -1,0 +1,551 @@
+---
+title: "Data Manipulation and Exploration Using R and R Studio"
+author: "Ryan Fryer, Actuarial Student, Gen Re"
+date: "Wedneday, September 23, 2020"
+output: html_document
+---
+
+```{r Introduce R Studio }
+
+# R Project
+  # Working directory
+  # setwd(dir = "File path here")
+  getwd()
+
+# Four Panes 
+  # Environment, History, Connections
+  # Files, Plots, Packages, Help, Viewer
+  # Source
+  # Console 
+
+# Re-arrange Panes
+  # View -> Panes -> Pane Layout
+
+# R Markdown
+  # Known for its documentation layout and formatting
+  # Can knit files to save as html, pdf, word doc
+  # Chunks can help organize/outline code,
+  # Help > Cheetsheats > R Markdown...
+
+```
+
+```{r Useful R Commands}
+
+# Clear the current R environment
+  # WARNING
+rm(list = ls())
+
+# Clear the current R plots
+dev.off()
+
+# Determine what version of R Studio is downloaded
+R.version.string
+
+# Update R
+#install.packages("installr")
+#library(installr)
+#updater()
+
+# Clear the current R console
+#cat("\014") # or Ctrl + L 
+
+```
+
+```{r Install Packages }
+
+# Download and Install any Packages that may need to be installed
+  
+  # How to manually install packages
+
+  # data.table is the primary package I will use
+  "data.table" %in% unique(data.frame(installed.packages())$Package)
+  install.packages("data.table")
+
+  # ggplpot2 is used for graphs and visualizations
+  "ggplot2" %in% unique(data.frame(installed.packages())$Package)
+  install.packages("ggplot2")
+
+
+  # other helpful packages
+    # dplyr                           # good for data.frame
+    # lubridate                       # handles dates efficiently
+    # shiny                           # creates interactive outputs
+    # readxl                          # improved importing ability among .xlsx files
+    # lifecontingencies               # actuarial packages that has mathematical formulas 
+  
+```
+
+```{r Load Packages }
+ 
+# Open those packages to access associated functions 
+  library(ggplot2)
+  packageVersion("ggplot2") # `3.3.2`
+  
+  library(data.table)
+  packageVersion("data.table")  # `1.13.0`
+
+```
+
+```{r Import the Data }
+
+# manually import
+
+# read.csv is more common - stored as "data.frame"
+system.time({ read.csv("2020 Virtual PPAS - Session 1 Data.csv")  })
+
+# fread comes from data.table package
+# it is faster and stores as both "data.frame" and "data.table"
+system.time({ fread("2020 Virtual PPAS - Session 1 Data.csv")  })
+
+# To obtain more info regarding a specific function
+?fread
+
+# fread is faster than csv and allows the data.table format
+
+# Import the data
+Import <- fread("2020 Virtual PPAS - Session 1 Data.csv")
+
+# Open the data
+View(Import)
+
+# This data was originally used to calculate Smoking and Obese % by Age,Gender,Year
+
+
+```
+
+```{r Understand the Characteristics of the Data }
+
+# Check the structure of the data
+  nrow(Import)                        # number of rows
+  ncol(Import)                        # number of columns
+  dim(Import)                         # dimension of the data
+  colnames(Import)                    # list of column names
+  str(Import)                         # structure of the data
+  class(Import$AGE_P)                 # check the data type of a variable
+  summary(Import)                     # summary of each field
+
+# Look at a sample of records
+  head(Import,10)                     # first 10
+  tail(Import,10)                     # last 10
+  head(Import,-10)                    # first 5 and last 5
+  Import[1:10,]                       # first 10, using data.table format
+  Import[sample(1:nrow(Import),10)]   # random sample of 10 records
+  
+```
+
+```{r Introduce data.table }
+
+# General format for data.table code
+  # DT[i,j,by=]
+  # Take DT, subset on i, look at j, grouped by...
+
+# Create your own data table
+  data.table(
+    Numbers = c(1,2),
+    Letters = c("A","B"))
+
+# Subsetting
+  Import[1:10,]
+  Import[AGE_P < 50,]
+  Import[SEX == 1,] # EQUAL TO
+  Import[SEX != 1,] # NOT EQUAL TO
+  Import[AGE_P < 50 & SEX == 1,] # AND
+  Import[AGE_P < 50 | SEX == 1,] # OR
+  # Plus many more! Examples in the Appendix
+
+# Selecting only certain fields from a data table
+  Import[,1:2]
+  Import[,.(AGE_P,SEX)]
+  
+# Creating a new field, only within the output
+  Import[,.(AGE_P, SEX, AgeGroup = 
+              cut(
+                x = AGE_P,
+                breaks = c(18,30,50,65,85),
+                include.lowest = TRUE,
+                right = TRUE))]
+
+# Creating a new field within the data, showing no output
+  Import[,AgeGroup := 
+           cut(
+             x = AGE_P,
+             breaks = c(18,30,50,65,85),
+             include.lowest = TRUE,
+             right = TRUE)]
+
+# Group by (only works with a fun argument)
+  Import[,.N,by=SEX]
+  Import[,.N,by=.(SEX,AgeGroup)]
+  Import[,.N,by=.(SEX,AgeGroup)][order(SEX,AgeGroup)]
+  Import[,mean(AGE_P),by=SEX]
+  Import[,.(Mean=mean(AGE_P),Median=median(AGE_P)),by=SEX]
+  
+# Chaining
+  Import[AGE_P < 50,][SEX == 1,][,median(BMI)]
+  # more complex chain commands to follow
+
+```
+
+```{r Explore the Data }
+
+# Explore Categorical Fields
+  uniqueN(Import[,SMKSTAT2])
+  unique(Import[,SMKSTAT2])  
+
+  data.table(
+    Name = colnames(Import),
+    Class = sapply(Import,class),
+    UniqueN = sapply(Import,uniqueN))
+  
+# Explore Numeric Fields
+  summary(Import[,AGE_P])
+  sapply(Import[,.(AGE_P,AHEIGHT,AWEIGHTP,BMI)],summary)
+
+```
+
+```{r Plotting the Data }
+
+# Introduce built-in plots
+  
+  # hist( )
+  hist(Import[,AGE_P])
+  hist(Import[,AGE_P],breaks = seq(0,100,1))
+  hist(Import[,AHEIGHT])
+  hist(Import[,BMI])
+  hist(Import[BMI<100,BMI],breaks = seq(0,100,1))
+  
+  # boxplot( )
+  boxplot(Import[,AGE_P])
+  boxplot(Import[,AHEIGHT])
+  
+  # plot( )
+  plot(Import[,AHEIGHT],Import[,AWEIGHTP])
+  # slower to render
+
+# The ggplot2 package allows for better data visualization
+
+  # ggplot(
+    # data = ... ,
+    # mapping = aes(x=... , y = ..., color = ...)) +
+  # geom_line
+  # geom_bar
+  # geom_boxplot
+  # geom_violin
+  # geom_smooth
+  # ggtitle
+  
+ggplot(
+  data = Import[,.(SUM=sum(WTFA_SA)),by=.(SRVY_YR,SMKSTAT2,SEX=ifelse(SEX==1,"M","F"))],
+  mapping = aes(x = SRVY_YR, y = SUM, fill=SMKSTAT2)) + 
+  geom_bar(position = "fill",stat = "identity")+
+  facet_grid(~SEX) +
+  ggtitle("Smoking, Over the Years")
+
+
+ggplot(
+  data = Import[BMI<99,],
+  mapping = aes(x = AgeGroup, y = BMI, fill = AgeGroup)) + 
+  geom_violin( ) +
+  geom_boxplot(width = 0.1) + 
+  theme(legend.position = "none") + 
+  facet_grid(~SEX)
+  
+  
+ dev.off() # clear the plots
+
+```
+
+```{r Modify the Data - Beginners }
+
+# It is a good idea to create a copy of the data to preserve the imported data
+  # DATA <- Import would cause the two data.tables to be linked
+DATA <- copy(Import)
+
+# Sometimes force numeric variable to be character
+# DATA <- DATA[,SRVY_YR := as.character(SRVY_YR)]
+
+# Sex, using fcase( ) as part of dplyr package
+DATA[,SEX := fcase(
+  SEX == 1, "Male",
+  SEX == 2, "Female")] # implied "all else" ~ NA
+
+# Final Weight, as numeric
+DATA <- DATA[,WTFA_SA := as.numeric(WTFA_SA)]
+
+# Age, as integer
+DATA <- DATA[,AGE_P := as.integer(AGE_P)]
+
+# Height, as integer
+DATA[,AHEIGHT_ADJ := ifelse(AHEIGHT <= 76, AHEIGHT, as.integer(NA))]
+
+# Weight, as integer
+DATA <- DATA[,AWEIGHTP_ADJ := ifelse(AWEIGHTP <= 299, AWEIGHTP, as.integer(NA))]
+
+# Survey Date, as date
+DATA <- DATA[,SRVY_DT2 := fcase(
+  !is.na( as.Date(SRVY_DT,"%m/%d/%Y") ), as.Date(SRVY_DT,"%m/%d/%Y"),
+  !is.na( as.Date(SRVY_DT,"%d %b %Y") ), as.Date(SRVY_DT,"%d %b %Y"), 
+  !is.na( as.Date(SRVY_DT,"%B %d, %Y") ), as.Date(SRVY_DT,"%B %d, %Y"))]
+  # lubridate is a good package when dealing with dates
+
+# Smoker Status, as factors (ordinal)
+DATA <- DATA[,SMKSTAT2:= factor(
+  x = SMKSTAT2,
+  levels = c(
+    "Never Ever",
+    "Former",
+    "Current, Unknown",
+    "Current, Some Days",
+    "Current, Every Day",
+    "Lifetime, Unknown"))]
+
+
+# Calculated Fields
+DATA <- DATA[,BMI_CALC := round( (AWEIGHTP_ADJ * 703 ) / (AHEIGHT_ADJ ^ 2), 1)]
+
+
+# Age Group, using cut ( ), creating factors
+DATA <- DATA[,AGE_GROUP := cut(
+  x = AGE_P,
+  breaks = c(0,18,30,50,65,85,Inf),
+  labels = NULL,
+  include.lowest = TRUE,
+  right = FALSE)]
+
+  
+# Using %in%
+DATA <- DATA[,SMKSTAT3 := fcase(
+  SMKSTAT2 %in% c(
+    "Current, Ever Day",
+    "Current, Some Days",
+    "Lifetime, Unknown",
+    "Current, Unknown"), "SMOKER",
+  SMKSTAT2 %in% c(
+    "Former",
+    "Never Ever"), "NONSMOKER")]
+
+
+# BMI Group, Using fcase( ) & between( )
+DATA <- DATA[,BMI_GROUP := fcase(
+  between(BMI,0,18.4), "Underweight (18.4 or below)",
+  between(BMI,18.5,24.9), "Healthy Weight (18.5-24.9)",
+  between(BMI,25.0,29.9), "Overweight (25.0-29.9)",
+  between(BMI,30.0,Inf), "Obese (30.0 and above)")]
+  # decimals are important
+
+```
+
+```{r Modify the Data - Advanced }
+
+# Modify All Variables at Once
+    DATA2 <- Import[,.(
+      
+      SURVEY_YEAR = as.integer(SRVY_YR),
+      SURVEY_DATE = fcase(
+        !is.na( as.Date(SRVY_DT,"%m/%d/%Y") ), as.Date(SRVY_DT,"%m/%d/%Y"),
+        !is.na( as.Date(SRVY_DT,"%d %b %Y") ), as.Date(SRVY_DT,"%d %b %Y"),
+        !is.na( as.Date(SRVY_DT,"%B %d, %Y") ), as.Date(SRVY_DT,"%B %d, %Y")),
+      FINAL_WEIGHT = as.numeric(WTFA_SA),
+      SEX = fcase(
+        SEX == 1, "Male",
+        SEX == 2, "Female"),
+      AGE = as.integer(AGE_P),
+      AGE_GROUP = cut(
+        x = AGE_P,
+        breaks = c(18,30,50,65,85),
+        include.lowest = TRUE,
+        right = TRUE),
+      SMOKING_GROUP = factor(SMKSTAT2,levels = c(
+        "Never Ever",
+        "Former",
+        "Current, Unknown",
+        "Current, Some Days",
+        "Current, Every Day",
+        "Lifetime, Unknown")),
+      SMOKING_STATUS = fcase(
+        SMKSTAT2 == "Never Ever", "Nonsmoker",
+        SMKSTAT2 == "Former", "Nonsmoker",
+        SMKSTAT2 == "Current, Unknown", "Smoker",
+        SMKSTAT2 == "Current, Some Days", "Smoker",
+        SMKSTAT2 == "Current, Every Day", "Smoker",
+        SMKSTAT2 == "Lifetime, Unknown", "Smoker"),
+      HEIGHT_IN = ifelse(AHEIGHT > 76, as.numeric(NA), AHEIGHT),
+      WEIGHT_LBS = ifelse(AWEIGHTP > 299, as.numeric(NA), AWEIGHTP))
+    ][, # chaining
+       BMI := round( (WEIGHT_LBS * 703 ) / (HEIGHT_IN ^ 2),1)
+       ][, # chaining
+         BMI_GROUP := fcase(
+           between(BMI,0,18.5), "Underweight (below 18.4)",
+           between(BMI,18.5,24.9), "Healthy Weight (18.5-24.9)",
+           between(BMI,25.0,29.9), "Overweight (25.0-29.9)",
+           between(BMI,30.0,Inf), "Obese (30.0 and above)")
+         ][, # chaining
+           OBESE_IND := fcase(
+             BMI >= 30.0, "Yes",
+             BMI <  30.0, "No")
+           ] 
+
+           
+```
+
+```{r Analyze the Data Using dcast }
+
+# As explained earlier, the data is record-weighted
+  # Which means to truly understand the distribution of the data
+  # By taking the sum of record weight by each value
+
+# 1-Dimensional 
+  # Sex
+    DATA2[,.(SUM = sum(FINAL_WEIGHT)),by = SEX
+          ][,.(SEX, PCT = SUM/sum(SUM))
+            ][,.(SEX,PCT = round(PCT,2))]
+    
+  # Age Group
+    DATA2[,.(SUM = sum(FINAL_WEIGHT)),by = AGE_GROUP
+          ][,.(AGE_GROUP, PCT = round(SUM/sum(SUM),2))
+            ][order(AGE_GROUP)]
+
+# 2-Dimensional
+    # SEX and Age Group
+    # DATA2[,.(SUM=sum(FINAL_WEIGHT)),by = .(SEX,AGE_GROUP)]
+
+    
+  # Introduce dcast( )
+    # dcast(
+    #   data = ,
+    #   formula = ,
+    #   fun.aggregate = ,
+    #   value.var = ) 
+    
+    d <- dcast(
+      data = DATA2,
+      formula = AGE_GROUP ~ SEX,
+      fun.aggregate = sum,
+      value.var = "FINAL_WEIGHT")
+    
+    # Row Pct
+    d[,.(AGE_GROUP,
+         F_Pct = round(Female/(Female+Male),2),
+         M_Pct = round(Male / (Female+Male),2))]
+    
+    # Column Pct
+    d[,.(AGE_GROUP,
+         F_Pct = round(Female/sum(Female),2),
+         M_Pct = round(Male/sum(Male),2))]
+    
+    # Total Pct
+    d[,.(AGE_GROUP,
+         F_Pct = round(Female/(sum(Female)+sum(Male)),2),
+         M_Pct = round(Male/(sum(Female)+sum(Male)),2))]
+
+```
+
+```{r Getting R Help }
+
+# General R help:
+  # stack overflow
+  # sthda -- ggplot
+
+# R Studio Cheatsheets
+  # https://rstudio.com/resources/cheatsheets/
+
+# data.table cheatsheet
+  # https://raw.githubusercontent.com/rstudio/cheatsheets/master/datatable.pdf
+
+# ggplot2 cheatsheet
+  # https://rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf
+
+# R Markdown Cheatsheet
+  # https://rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf
+
+# Date formats
+  # %Y: 4-digit year (1982)
+  # %y: 2-digit year (82)
+  # %m: 2-digit month (01)
+  # %d: 2-digit day of the month (13)
+  # %A: weekday (Wednesday)
+  # %a: abbreviated weekday (Wed)
+  # %B: month (January)
+  # %b: abbreviated month (Jan) 
+
+
+```
+
+THE END
+
+```{r Appendix R Code}
+
+# barplot of sex
+ggplot(
+      data = DATA2[,.(SUM = sum(FINAL_WEIGHT)),by=SEX][,.(SEX,PCT=round(SUM/sum(SUM),2))],
+      mapping = aes(x = SEX, y = PCT, fill = SEX)) + 
+      geom_bar(stat = "identity") +
+      geom_label(aes(label =  PCT)) + 
+      ggtitle("Distribution of Sex") +
+      theme(legend.position = "none")
+
+# barplot of age group
+ggplot(
+      data=DATA2[,.(SUM = sum(FINAL_WEIGHT)),by=.(SEX,AGE_GROUP)][,.(SEX,AGE_GROUP,PCT=round(SUM/sum(SUM),2))],
+      mapping = aes(x = SEX, y = PCT, color = AGE_GROUP)) + 
+      geom_bar(stat = "identity",position = "dodge",size = 1) +
+      geom_label(aes(label =  PCT),position = position_dodge(width = .95)) + 
+      ggtitle("Distribution of Sex")
+
+
+# violin plot (not accurate in this example because data is record-weighted)
+ggplot(
+  data = DATA2,
+  mapping = aes(x = SEX, y = BMI, fill = SEX)) + 
+  geom_violin( ) + 
+  geom_boxplot(width = .1) + 
+  theme(legend.position = "none")
+
+
+# line plot
+ggplot(
+  data = dcast(
+    data = DATA2,
+    formula = SURVEY_YEAR + SEX ~ SMOKING_STATUS,
+    fun.aggregate = sum,
+    value.var = "FINAL_WEIGHT"
+  )[,.(SURVEY_YEAR,SEX,`SM %` = Smoker/(Nonsmoker+Smoker))],
+  mapping = aes(x = SURVEY_YEAR, y = `SM %`, color = SEX)) + 
+  geom_point() + 
+  geom_smooth() +
+  ggtitle("Evolution of Smoking, With 95% Confidence")
+
+
+
+# facet grid
+
+ggplot(
+  data = dcast(data = DATA2,
+               formula = SURVEY_YEAR + SEX + AGE_GROUP ~ SMOKING_STATUS,
+               fun.aggregate = sum,
+               value.var = "FINAL_WEIGHT")[,`SM%` := Smoker/(Nonsmoker+Smoker)],
+  mapping = aes(x=SURVEY_YEAR,y=`SM%`, color=SEX)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  facet_grid(~ AGE_GROUP) + 
+  ggtitle("The Evolution of Smoking Percent")
+
+
+ggplot(
+  data = merge(
+    x = dcast(data = DATA2,
+               formula = SURVEY_YEAR + SEX + AGE_GROUP ~ SMOKING_STATUS,
+               fun.aggregate = sum,
+               value.var = "FINAL_WEIGHT")[,`SM%` := Smoker/(Nonsmoker+Smoker)],
+    y = dcast(data = DATA2,
+               formula = SURVEY_YEAR + SEX + AGE_GROUP ~ OBESE_IND,
+               fun.aggregate = sum,
+               value.var = "FINAL_WEIGHT")[,`OB%` := Yes/(Yes+No)],
+    by = c("SURVEY_YEAR","SEX","AGE_GROUP")),
+  mapping = aes(x = SURVEY_YEAR)) +
+  
+  geom_smooth(aes(y = `SM%`,color="Smoking %"),se=FALSE) + 
+  geom_smooth(aes(y = `OB%`,color="Obese %"),se=FALSE) + 
+  facet_grid(AGE_GROUP~SEX)
+
+```
