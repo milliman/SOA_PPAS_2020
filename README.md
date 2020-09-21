@@ -50,3 +50,10 @@ File|Description
 [heartdiseasedataset_modified.RDS](handson_challenges/heartdiseasedataset_modified.RDS) | Modified version heart disease dataset for challenges
 [ModifyDatasetForPPAS.R](handson_challenges/ModifyDatasetForPPAS.R) | R script to modify the original heart disease dataset for challenges
 [TitanicSurvival.csv](handson_challenges/TitanicSurvival.csv) | A .csv copy of base R's classic Titanic survival dataset |
+
+## Presentation documments file notes
+
+File|Description
+:--|:--
+[2020 Virtual PPAS - Session 1 Code.RMD](presentation_documents/2020 Virtual PPAS - Session 1 Code.RMD) | R markdown code for Session 2
+[2020 Virtual PPAS - Session 1 Data.csv](presentation_documents/2020 Virtual PPAS - Session 1 Data.csv) | Dataset accompanying Session 2 R markdown file (above) |
