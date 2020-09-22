@@ -7,8 +7,8 @@ library(ROCR)
 # Import data/model (from challenge 2) ####
 # Only if needed! Feel free to use your own objects from challenge #2.
 
-heartattack <- readRDS("02_heartdiseasedataset.RDS")
-logistic.model <- readRDS("02_SampleLogisticModel.RDS")
+heartattack <- readRDS("handson_challenges/02_heartdiseasedataset.RDS")
+logistic.model <- readRDS("handson_challenges/02_SampleLogisticModel.RDS")
 
 # Challenge ####
 

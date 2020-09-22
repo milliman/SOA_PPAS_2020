@@ -22,7 +22,7 @@ library(dplyr)
 library(car)
 library(stringr)
 
-heartattack <- readRDS("heartdiseasedataset_modified.RDS")
+heartattack <- readRDS("handson_challenges/heartdiseasedataset_modified.RDS")
 ```
 
 ## Review data

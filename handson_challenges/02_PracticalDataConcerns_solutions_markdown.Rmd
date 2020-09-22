@@ -22,7 +22,7 @@ library(dplyr)
 library(car)
 library(stringr)
 
-heartattack <- readRDS("heartdiseasedataset_modified.RDS")
+heartattack <- readRDS("handson_challenges/heartdiseasedataset_modified.RDS")
 ```
 
 ## Review data
@@ -127,7 +127,7 @@ heartattack <- heartattack %>%
                          "training"))
 
 saveRDS(heartattack,
-        file = "02_heartdiseasedataset.RDS")
+        file = "handson_challenges/02_heartdiseasedataset.RDS")
 ```
 
 ### 4) Fit logistic regression to estimate heart attack odds given region, year, age, sex, and race.
