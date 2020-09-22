@@ -9,7 +9,7 @@ library(dplyr)
 # Data represent a derivative of this dataset: https://www.kaggle.com/mazharkarimi/heart-disease-and-stroke-prevention/metadata 
 # Original dataset and its derivatives are protected by a database license and a content license, included in this repository's documents 
 
-heartattack <- readRDS("heartdiseasedataset_modified.RDS")
+heartattack <- readRDS("handson_challenges/heartdiseasedataset_modified.RDS")
 
 # Look at the data ####
 head(heartattack)
