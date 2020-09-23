@@ -21,7 +21,8 @@ titanic <- TitanicSurvival
 
 # or from the repository
 titanic <- read.csv("TitanicSurvival.csv",
-                    row.names = 1)
+                    row.names = 1,
+                    stringsAsFactors = TRUE)
 ```
 
 ## Review data
