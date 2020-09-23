@@ -9,7 +9,7 @@ library(car)
 titanic <- TitanicSurvival 
 
 # or from the repository
-titanic <- read.csv("TitanicSurvival.csv",
+titanic <- read.csv("handson_challenges/TitanicSurvival.csv",
                     row.names = 1)
 
 # Look at the data
