@@ -1,10 +1,13 @@
 # Model tuning
+
+# Load packages and data ####
 library(tidyverse)
 library(xgboost)
 library(MLmetrics)
-training <- readRDS("training_prepped.Rds")
-testing <- readRDS("testing_prepped.Rds")
+training <- readRDS("HackAThon/training_prepped.Rds")
+testing <- readRDS("HackAThon/testing_prepped.Rds")
 
+# Construct model matrices for xgboost algorithm ####
 mod.mat <- model.matrix( ~ .,
                         data = training %>% select(-result))
 response <- training$result
@@ -14,6 +17,7 @@ mod.mat.testing <- model.matrix( ~ .,
                          data = testing)
 d.mat.testing <- xgb.DMatrix(data = mod.mat.testing)
 
+# Tune hyper parameters ####
 tune.grid <- expand.grid(eta = seq(0.005, 0.01, 0.0025),
                          max_depth = c(3:6),
                          subsample = seq(0.7, 1, 0.1),
@@ -54,6 +58,7 @@ for(i in 1:nrow(tune.grid)){
 
 proc.time() - timer
 
+# Use ensemble of top 20 models in predictions ####
 top.models <- tune.grid %>% 
   bind_cols(results) %>%
   arrange(test_error) %>%
@@ -91,6 +96,7 @@ testing[["preds"]] <- sapply(models, function(x){
   apply(., 1, mean)
 
 # Test F1 score at various thresholds ####
+# i.e. tune the best threshold for determining pass/fail from predicted probabilities
 F1 <- c()
 i <- 1
 thold <- seq(0.45, 0.55, 0.01) 
@@ -113,11 +119,12 @@ F1.thold <- F1.scores$thold[F1.scores$F1 == max(F1.scores$F1)][1]
 # Apply predictions to testing ####
 testing_submission <- data.frame(preds = ifelse(testing$preds > F1.thold, 1, 0))
 write.csv(testing_submission,
-          file = "testing_submission_kullowatz.csv",
+          file = "HackAThon/testing_submission_kullowatz.csv",
           row.names = F)
 
 
 # Fit next-best models in list ####
+# approximately same code as above
 top.models2 <- tune.grid %>% 
   bind_cols(results) %>%
   arrange(test_error) %>%
@@ -176,5 +183,5 @@ F1.thold.2 <- F1.scores.2$thold.2[F1.scores.2$F1.2 == max(F1.scores.2$F1.2)][1]
 # Apply predictions to testing ####
 testing_submission_2 <- data.frame(preds = ifelse(testing$preds2 > F1.thold.2, 1, 0))
 write.csv(testing_submission_2,
-          file = "testing_submission_kullowatz_2.csv",
+          file = "HackAThon/testing_submission_kullowatz_2.csv",
           row.names = F)

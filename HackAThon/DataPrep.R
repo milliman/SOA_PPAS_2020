@@ -1,19 +1,26 @@
+# Prepare data for modeling
+
+# Load packages and data ####
 library(tidyverse)
 Mode <- function(x) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))]
 }
 
-# Data prep
-training <- read.csv("training.csv", stringsAsFactors = F)
+training <- read.csv("HackAThon/training.csv", stringsAsFactors = F)
+testing <- read.csv("HackAThon/testing.csv", stringsAsFactors = F)
+
+# Data prep ####
+
+# Deal with missing values ####
 
 # A few missing values!
 sapply(training, function(x) sum(is.na(x)))
 
-# This missing values are isolated, no row has more than 1
+# These missing values are isolated, no row has more than 1
 apply(training, 1, function(x) sum(is.na(x))) %>% table()
 
-# Impute with mean or mode
+# Impute missing values with mean or mode
 for(i in 1:ncol(training)){
   if(class(training[,i]) %in% c("numeric", "integer")){
     training[,i] <- ifelse(is.na(training[,i]), mean(training[,i], na.rm = T), training[,i])
@@ -22,21 +29,23 @@ for(i in 1:ncol(training)){
   }
 }
 
+# Save dataset for modeling ####
 training <- training %>%
   mutate(result = ifelse(result == "pass", 1, 0))
 
 saveRDS(training, 
-        "training_prepped.Rds")
+        "HackAThon/training_prepped.Rds")
 
 
 # Data prep (testing) ####
-testing <- read.csv("testing.csv", stringsAsFactors = F)
+# (same basic code as above)
 
-# A few missing values!
+# No missing values!
 sapply(testing, function(x) sum(is.na(x)))
 
-# This missing values are isolated, no row has more than 1
-apply(testing, 1, function(x) sum(is.na(x))) %>% table()
+# No need for this code...
+# # This missing values are isolated, no row has more than 1
+# apply(testing, 1, function(x) sum(is.na(x))) %>% table()
 
 # Impute with mean or mode
 for(i in 1:ncol(testing)){
@@ -48,4 +57,4 @@ for(i in 1:ncol(testing)){
 }
 
 saveRDS(testing, 
-        "testing_prepped.Rds")
+        "HackAThon/testing_prepped.Rds")
