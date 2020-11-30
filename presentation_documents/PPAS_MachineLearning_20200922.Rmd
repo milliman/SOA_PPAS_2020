@@ -1,0 +1,364 @@
+---
+html_document:
+  highlight: haddock
+  theme: spacelab
+author: "Talex Diede"
+output:
+  pdf_document:
+    highlight: default
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: 4
+  html_document:
+    toc: yes
+sansfont: Calibri
+title: 'Practical Predictive Analytics Seminar: Machine learning methods'
+---
+
+## Intro
+In the previous sessions we were introduced to the mortality dataset, and we saw how to do some intitial data exploration and cleaning. We looked at fitting a logistic GLM, used stepwise regression to identify significant variables, and assessed overall model fit. We also discussed how to compare candidate models. In this session we will explore the world beyond linear models, moving into machine learning methods.    
+
+## Load packages
+```{r 00Environment, message = F, warning = F}
+# install.packages("e1071", dependencies = TRUE)
+library(tidyverse)
+library(lubridate)
+library(tidymodels)
+library(doFuture)
+library(vip)
+library(rpart)
+library(rpart.plot)
+library(xgboost)
+```
+
+```{r 00GlobalOptions, echo = F, message = F, warning = F}
+library(knitr)
+knitr::opts_chunk$set(comment = '   ',
+               strip.white = T,
+               fig.path='Figs/', warning=FALSE, message=FALSE, 
+               fig.height = 5, fig.width = 7.5, fig.keep = "high",
+               dpi = 200)
+```
+
+Import cleaned data:
+```{r 01DataLoad}
+data.large <- readRDS("PPASExpandedData.rds")
+```
+
+## 1. Data setup
+### A. Data exploration
+Here we'll take another quick look at the variables in the dataset and their respective summaries. This was already demonstrated in the previous session, but will be helpful information to have around for this analysis as well.  
+```{r 02DataExploration, eval = F}
+summary(data.large)
+```
+
+
+### B. Training, holdout, and testing datasets
+Now we'll split the dataset into the same subsets it was split into for the previous analysis. A 50% training sample, a 25% in-time holdout sample, and a 25% out-of-time holdout sample. If you were continuing on from the previous analysis you wouln't need to repeat this process.
+```{r 03TrainingHoldoutTest, message = F, warning = F}
+(test.cut.date <- quantile(data.large$current.date, .75, type = 1))
+set.seed(1)
+sample.rand <- data.frame(PolNum = 1:45000, 
+                      RandNum = runif(45000, 0, 1))
+data.large <- left_join(data.large, sample.rand)
+data.large <- mutate(data.large,
+                     Sample = ifelse(current.date > test.cut.date, "testing", 
+                                     ifelse(RandNum > 2/3, "holdout", "training")))
+```
+
+## 2. Model fitting
+In this section we will begin fitting machine learning models to the dataset which we have loaded and divided into training and holdout samples in the prior section. To run the models in this section we first create the upper bound formula object. This will tell the algorithms what variables to consider for use in better predicting the death indicator.
+
+### A. Formula
+
+```{r 04FormulaSetup}
+data.large %>%
+  filter(Sample == "training") %>% 
+  mutate(Death = factor(Death)) -> train_data
+
+recipe(Death ~ ., data = train_data) %>% 
+  update_role(PolYear,
+              timeinstudy,
+              timetodeath,
+              enteredstudydate,
+              studyenddate,
+              dob,
+              dod,
+              died,
+              age,
+              death_ind,
+              timetodeath2,
+              ht.wt.flag,
+              bmisqrerr,
+              cancer_ind,
+              healthy_ind,
+              years,
+              finalyearfrac,
+              YearFrac,
+              current.date,
+              RandNum,
+              Sample,
+              new_role = "ID") %>% 
+  step_string2factor(all_nominal(), -all_outcomes()) %>% 
+  step_normalize(all_numeric(), -all_outcomes()) %>% 
+  step_dummy(all_predictors(), -all_numeric()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_medianimpute(all_numeric()) %>% 
+  step_naomit(all_predictors()) -> death_recipe
+
+death_recipe
+
+```  
+```{r 04bFormulaInspect}
+death_recipe$var_info
+```
+```{r 04ModFrame}
+mod_frame <- death_recipe %>% 
+  prep() %>% 
+  juice()
+```
+
+
+### B. CART  
+CART stands for classification and regression trees. They are a reasonably simple concept, but we focus on them here because of their utility in more advanced methods. At its core, a tree is just a sequence of yes/no questions or rules used to split the data into subgroups. Then, depending on whether you are building a classification tree or a regression tree, the result will be either a predicted class for each subgroup or a predicted continuous value for each subgroup. For this example, we will use the rpart package to fit a tree to our sample data.  
+
+The tree model will use the formula object we created previously. 
+
+```{r 05CART}
+tree_mod <- decision_tree(cost_complexity = tune(),
+                tree_depth = tune(),
+                min_n = tune()) %>% 
+  set_engine("rpart") %>% 
+  set_mode("classification")
+
+par_grid <- grid_max_entropy(cost_complexity(),
+                             tree_depth(),
+                             min_n(range = c(50, 100)),
+                             size = 10)
+
+summary(par_grid)
+```  
+```{r 05bCART, warnings = F}
+set.seed(1234)
+cv_splits <- rsample::vfold_cv(train_data, v = 10, repeats = 1)
+
+tree_workflow <- 
+  workflow() %>% 
+  add_model(tree_mod) %>% 
+  add_recipe(death_recipe)
+tree_workflow
+
+registerDoFuture()
+cl <- makeCluster(10)
+plan(cluster, workers = cl)
+
+tree_res <- 
+  tree_workflow %>% 
+  tune_grid(resamples = cv_splits,
+            grid = par_grid,
+            control = control_grid(allow_par = T))
+stopCluster(cl)
+rm(cl)
+gc()
+```
+```{r}
+tree_res %>% 
+  show_best()
+
+best <- tree_res %>% 
+  select_best()
+
+final_wf <- 
+  tree_workflow %>% 
+  finalize_workflow(best)
+
+final_wf
+
+final_mod_rpart <- 
+  final_wf %>%
+  fit(data = train_data)
+```
+
+
+
+```{r 06Results}
+final_mod_rpart
+
+
+rpart.plot(final_mod_rpart$fit$fit$fit)
+
+```    
+```{r}
+final_mod_rpart %>% 
+  pull_workflow_fit() %>% 
+  vip()
+```
+
+
+### C. Ensemble (GBM Model)
+Ensemble models are combinations of models. In an ensemble model, we run two or more related but different models and aggregate those results into a single prediction. This is done to improve the accuracy of predictions and stability of the model. They are easier to overfit, so proper care should be spent validating the resulting model predictions.
+
+
+#### i. GBM model fit
+
+This ensemble example uses a gradient boosted machine (GBM) algorithm. We will use the gbm package to fit the model. The full model formula used is the same as was used for the CART example, GBMs allow for a bernoulli distribution similar to a GLM. This algorithm has two major input parameters, n.trees and shrinkage. We have set these to be something reasonable for this example, but they should both be optimized and validated when creating a final model for use.
+
+```{r 07GBM}
+
+set.seed(17)
+xg_mod <- 
+  boost_tree(trees = tune(), 
+             tree_depth = tune(),
+             min_n = 100,
+             loss_reduction = tune(),
+             learn_rate = tune(),
+             mtry = tune(),
+             sample_size = tune()) %>% 
+  set_engine("xgboost", nthread = 2) %>% 
+  set_mode("classification")
+
+xg_reg_grid <- grid_max_entropy(trees(),
+                            tree_depth(),
+                            loss_reduction(),
+                            learn_rate(),
+                            finalize(mtry(), mod_frame),
+                            sample_size = sample_prop(),
+                            size = 10)
+summary(xg_reg_grid)
+
+```
+
+```{r}
+set.seed(1234)
+cv_splits <- rsample::vfold_cv(train_data, v = 10, repeats = 1)
+
+xg_workflow <- 
+  workflow() %>% 
+  add_model(xg_mod) %>% 
+  add_recipe(death_recipe)
+xg_workflow
+
+```
+
+
+
+#### ii. Parameter tuning
+
+In this section we will present how to use the caret package to assist in tuning model parameters. We are using it to tune our GBM parameters but the package generalizes to many other model types as well. In this chunk of code we set up the grid of possible parameters that will be considered when tuning our model. We'll also initialize the parallel backend that will be used for the tuning process. 
+
+**Note: use at least 1 fewer threads in your cluster than your computer has available, e.g. on a dual-core machine you have 4 threads so don't set the number of cores higher than 3. **
+```{r 08ParameterTune}
+registerDoFuture()
+cl <- makeCluster(10)
+plan(cluster, workers = cl)
+
+xg_res <- 
+  xg_workflow %>% 
+  tune_grid(resamples = cv_splits,
+            grid = xg_reg_grid,
+            control = control_grid(allow_par = T))
+stopCluster(cl)
+rm(cl)
+gc()
+```
+In the following chunk of code we will run the train function from the caret package to optimize the tuning parameters for our model. In this case we have set it up to select the best model based on AUC, but there are other options depending on the type of regression you are performing. This process will use cross-validation to determine the best model, and the number of folds for the cross-validation is set to be 5. It's also interesting that this step requires the outcomes to not be 0 and 1 as the typical gbm function prefers, so we manipulate the outcome variable to have character values.
+
+**Important note: This is a long process, don't start running this on your local machine unless you're prepared for it to take hours**
+
+```{r 09}
+xg_res %>% 
+  show_best()
+
+best <- 
+  xg_res %>% 
+  select_best()
+
+final_wf <- 
+  xg_workflow %>% 
+  finalize_workflow(best)
+
+final_wf
+
+```
+
+```{r 09b}
+final_mod <- 
+  final_wf %>%
+  fit(data = train_data)
+```
+
+
+```{r 11TuningPlot}
+final_mod %>% 
+  pull_workflow_fit() %>% 
+  vip()
+```
+
+### Assess and compare models
+
+Now we may want to bring the model validation skills that we've learned to these machine learning models. So we start by revisiting an A/E plot by date to discover that our machine learning model is not capturing a factor of date. This may indicate a place that we would want to revisit in our model building process.
+```{r 14AEDateTraining}
+probs <- 
+  predict(final_mod,
+          type = "prob",
+          new_data = data.large) %>% 
+  bind_cols(data.large)
+
+
+date.plotdata <- filter(probs, Sample == "training") %>%
+  group_by(Date.bin = ntile(current.date, 20)) %>%
+  summarize(Date = mean(current.date),
+            AE.date = mean(as.numeric(as.character(Death)))/mean(.pred_1))
+
+plot(date.plotdata$Date, date.plotdata$AE.date, 
+     pch = ".", cex = 0,
+     main = "A/E Plot",
+     xlab = "Date",
+     ylab = "A/E",
+     ylim = c(0.55, 1.25),
+     type = "l",
+     lwd = 2,
+     col = "blue")
+abline(h = 1)
+```
+The plot below shows the A/E chart for attained age on the training data, we can see that the model performs quite well for most ages above about 75.
+
+```{r 15AEAgeTraining}
+age.plotdata <- filter(probs, Sample == "training") %>%
+  group_by(age.bin = ntile(AttAge, 20)) %>%
+  summarize(Age = mean(AttAge),
+            AE.date = mean(as.numeric(as.character(Death)))/mean(.pred_1))
+
+plot(age.plotdata$Age, age.plotdata$AE.date, 
+     pch = ".", cex = 0,
+     main = "A/E Plot: Training",
+     xlab = "Age",
+     ylab = "A/E",
+     ylim = c(0.55, 1.25),
+     type = "l",
+     lwd = 2,
+     col = "blue")
+abline(h = 1)
+```
+Below we consider the same view as the above plot but on the holdout dataset, to check for overfitting issues on the attained age variable. It's predictably less tight around 1 but is still centered about 1 without too much variance or definable pattern.
+```{r 16AEAgeHoldout}
+age.plotdata <- filter(probs, Sample == "holdout") %>%
+  group_by(age.bin = ntile(AttAge, 20)) %>%
+  summarize(Age = mean(AttAge),
+            AE.date = sum(Death)/sum(.pred_1))
+
+plot(age.plotdata$Age, age.plotdata$AE.date, 
+     pch = ".", cex = 0,
+     main = "A/E Plot: Holdout",
+     xlab = "Age",
+     ylab = "A/E",
+     ylim = c(0.55, 1.25),
+     type = "l",
+     lwd = 2,
+     col = "blue")
+abline(h = 1)
+```
+
+
+## Conclusion  
+The material included here only scratches the surface of all that is considered machine learning. Even for the algorithms demonstrated here, this isn't the end of the road. These models haven't been validated or fully parameterized, so they are not to be taken as "best" or even necessarily good models for this dataset. More information on these packages, and more that perform similar algorithms, can be found on CRAN. There are also many good Coursera and other MOOC courses that provide more in-depth training on maching learning algorithms. 
