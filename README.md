@@ -57,3 +57,5 @@ File|Description
 :--|:--
 [2020 Virtual PPAS - Session 1 Code.RMD](presentation_documents/2020 Virtual PPAS - Session 1 Code.RMD) | R markdown code for Session 2
 [2020 Virtual PPAS - Session 1 Data.csv](presentation_documents/2020 Virtual PPAS - Session 1 Data.csv) | Dataset accompanying Session 2 R markdown file (above) |
+[PAS_MachineLearning_code_20200922.Rmd](presentation_documents/PAS_MachineLearning_code_20200922.Rmd) | R markdown code presented in session 4a (machine learning); note an error on final two A/E plots |
+[PAS_MachineLearning_code_20200922.pdf](presentation_documents/PAS_MachineLearning_code_20200922.pdf) | PDF markdown output presented in session 4a (machine learning); note an error on final two A/E plots |
